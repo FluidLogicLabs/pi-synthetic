@@ -1,0 +1,65 @@
+name: Model sync
+
+on:
+  schedule:
+    - cron: "0 6,18 * * *"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Compare models with upstream
+        id: compare
+        run: |
+          set +e
+          pnpm exec tsx scripts/sync-models.ts > sync-output.md
+          exit_code=$?
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+          cat sync-output.md >> "$GITHUB_STEP_SUMMARY"
+          echo "----"
+          cat sync-output.md
+
+      - name: Create issue on drift
+        if: steps.compare.outputs.exit_code != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          label="model-sync"
+
+          existing_count=$(gh issue list \
+            --label "$label" \
+            --state open \
+            --json number \
+            --jq 'length')
+
+          if [ "$existing_count" -gt 0 ]; then
+            echo "An open $label issue already exists. Skipping."
+            exit 0
+          fi
+
+          gh label create "$label" --color "FBCA04" --description "Upstream Synthetic model drift" || true
+
+          gh issue create \
+            --label "$label" \
+            --title "[model-sync] Upstream Synthetic model drift detected ($(date -u +%Y-%m-%d))" \
+            --body-file sync-output.md
