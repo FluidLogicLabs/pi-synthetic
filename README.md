@@ -66,6 +66,24 @@ The `provider` field in `extensions/provider/models.ts` is for maintenance only 
 
 The extension registers `synthetic_web_search` — a zero-data-retention web search tool. At session start, it checks the Synthetic quotas API in the background even when another provider is selected. The tool is available only after that check confirms a Synthetic subscription; it remains hidden for pay-as-you-go accounts, missing credentials, and quota API failures.
 
+### Prompt Cache
+
+Synthetic caches prompt prefixes when the same user, model, and prefix hit the same inference node. Pi sees cache hits through the OpenAI-compatible `prompt_tokens_details.cached_tokens` field on streaming responses, which it maps to `usage.cacheRead`.
+
+This extension prices cache reads at **80% off** the API list rate (i.e., `cacheRead = input × 0.2`). This discount applies to both subscriptions and PAYG as of Synthetic v0.11.x (2026-07-22).
+
+**How the cache behaves as of 2026-07-25** (based on Synthetic staff updates):
+
+- **No explicit TTL.** Cache liveness is LRU-driven per node, not a fixed time window.
+- **Tiered storage.** L0 is GPU KV cache, L1 is CPU, and L2 is disk; hierarchical offload increases hit rates under load.
+- **Node affinity.** Synthetic routes identical user/model/prefix combinations to the same node when possible, so concurrent agents usually share the cache.
+- **No cross-request wipe.** Other requests do not automatically invalidate your cache.
+- **Load and restarts matter.** Under heavy load a request may land on a fresh machine with no cache; a node restart wipes the cache.
+- **Engine differences.** Kimi uses vLLM, which aligns caches to boundary sizes and may miss on small requests. GLM-5/5.1 uses SGLang, which is more aggressive about cache hits.
+- **Typical hit rates.** Users and staff report 80%+ cache hit rates on long-context work; reported internal figures for GLM 5.1 and Kimi K2.6 were ~82% as of 2026-06-02.
+
+Cross-session reuse is not guaranteed; reuse within a single session or a short concurrent span is the reliable case.
+
 ### Reasoning Levels
 
 Synthetic reasoning models are mostly binary on/off (a single `medium` toggle in Pi's UI). The exception is `hf:zai-org/GLM-5.2`, which exposes two tiers plus off:
