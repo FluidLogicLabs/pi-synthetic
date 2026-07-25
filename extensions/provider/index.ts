@@ -83,7 +83,6 @@ export default async function (pi: ExtensionAPI) {
 
   pi.events.on(SYNTHETIC_CONFIG_UPDATED_EVENT, (data: unknown) => {
     const config = (data as SyntheticConfigUpdatedPayload).config;
-    registerSyntheticProvider(pi);
 
     if (
       config.proxyUrl !== utilityApiProxyUrl ||
