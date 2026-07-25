@@ -3,6 +3,7 @@ import type { SyntheticApiModel } from "../../src/client/types";
 import {
   buildSyntheticProviderModels,
   buildSyntheticProviderModelsFromApi,
+  parseApiPrice,
   SYNTHETIC_MODELS,
 } from "./models";
 
@@ -28,13 +29,6 @@ async function fetchApiModels(): Promise<SyntheticApiModel[]> {
 
   const data: { data?: SyntheticApiModel[] } = await response.json();
   return data.data ?? [];
-}
-
-function parsePrice(priceStr: string): number {
-  const match = priceStr.match(/\$?(\d+\.?\d*)/);
-  if (!match) return 0;
-  const pricePerToken = Number.parseFloat(match[1]);
-  return pricePerToken * 1_000_000;
 }
 
 function compareModels(
@@ -85,7 +79,7 @@ function compareModels(
       });
     }
 
-    const apiInputCost = parsePrice(apiModel.pricing.prompt);
+    const apiInputCost = parseApiPrice(apiModel.pricing.prompt);
     const epsilon = 0.001;
     if (Math.abs(apiInputCost - hardcoded.cost.input) > epsilon) {
       discrepancies.push({
@@ -96,13 +90,26 @@ function compareModels(
       });
     }
 
-    const apiOutputCost = parsePrice(apiModel.pricing.completion);
+    const apiOutputCost = parseApiPrice(apiModel.pricing.completion);
     if (Math.abs(apiOutputCost - hardcoded.cost.output) > epsilon) {
       discrepancies.push({
         model: hardcoded.id,
         field: "cost.output",
         hardcoded: hardcoded.cost.output,
         api: apiOutputCost,
+      });
+    }
+
+    // The catalog stores the discounted cache-read rate (20% of the API list
+    // price) so that `model.cost.cacheRead` is what Pi uses directly.
+    const apiCacheReadCost = parseApiPrice(apiModel.pricing.input_cache_reads);
+    const expectedCacheReadCost = Number((apiCacheReadCost * 0.2).toFixed(10));
+    if (Math.abs(expectedCacheReadCost - hardcoded.cost.cacheRead) > epsilon) {
+      discrepancies.push({
+        model: hardcoded.id,
+        field: "cost.cacheRead",
+        hardcoded: hardcoded.cost.cacheRead,
+        api: apiCacheReadCost,
       });
     }
 
@@ -176,9 +183,9 @@ describe("Synthetic models", () => {
       if (model.reasoning) {
         expect(compat?.supportsReasoningEffort).toBe(true);
       }
-      // Synthetic bills cache reads at 80% off the API list price.
+      // The hardcoded catalog stores the discounted cache-read rate directly.
       if (model.cost.input > 0) {
-        expect(model.cost.cacheRead).toBe(model.cost.input * 0.2);
+        expect(model.cost.cacheRead).toBeCloseTo(model.cost.input * 0.2, 10);
       }
     }
   });

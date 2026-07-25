@@ -37,7 +37,7 @@ export const SYNTHETIC_MODELS: SyntheticModel[] = [
     cost: {
       input: 1,
       output: 3,
-      cacheRead: 1,
+      cacheRead: 0.2,
       cacheWrite: 0,
     },
     contextWindow: 524288,
@@ -63,7 +63,7 @@ export const SYNTHETIC_MODELS: SyntheticModel[] = [
     cost: {
       input: 0.1,
       output: 0.5,
-      cacheRead: 0.1,
+      cacheRead: 0.02,
       cacheWrite: 0,
     },
     contextWindow: 196608,
@@ -89,7 +89,7 @@ export const SYNTHETIC_MODELS: SyntheticModel[] = [
     cost: {
       input: 0.95,
       output: 4,
-      cacheRead: 0.95,
+      cacheRead: 0.19,
       cacheWrite: 0,
     },
     contextWindow: 262144,
@@ -115,7 +115,7 @@ export const SYNTHETIC_MODELS: SyntheticModel[] = [
     cost: {
       input: 0.45,
       output: 3.6,
-      cacheRead: 0.45,
+      cacheRead: 0.09,
       cacheWrite: 0,
     },
     contextWindow: 262144,
@@ -130,7 +130,7 @@ export const SYNTHETIC_MODELS: SyntheticModel[] = [
     cost: {
       input: 0.1,
       output: 0.1,
-      cacheRead: 0.1,
+      cacheRead: 0.02,
       cacheWrite: 0,
     },
     contextWindow: 131072,
@@ -157,7 +157,7 @@ export const SYNTHETIC_MODELS: SyntheticModel[] = [
     cost: {
       input: 1,
       output: 3,
-      cacheRead: 1,
+      cacheRead: 0.2,
       cacheWrite: 0,
     },
     contextWindow: 524288,
@@ -183,7 +183,7 @@ export const SYNTHETIC_MODELS: SyntheticModel[] = [
     cost: {
       input: 0.1,
       output: 0.5,
-      cacheRead: 0.1,
+      cacheRead: 0.02,
       cacheWrite: 0,
     },
     contextWindow: 196608,
@@ -209,7 +209,7 @@ export const SYNTHETIC_MODELS: SyntheticModel[] = [
     cost: {
       input: 0.95,
       output: 4,
-      cacheRead: 0.95,
+      cacheRead: 0.19,
       cacheWrite: 0,
     },
     contextWindow: 262144,
@@ -235,7 +235,7 @@ export const SYNTHETIC_MODELS: SyntheticModel[] = [
     cost: {
       input: 0.45,
       output: 3.6,
-      cacheRead: 0.45,
+      cacheRead: 0.09,
       cacheWrite: 0,
     },
     contextWindow: 262144,
@@ -262,7 +262,7 @@ export const SYNTHETIC_MODELS: SyntheticModel[] = [
     cost: {
       input: 0.6,
       output: 1.2,
-      cacheRead: 0.6,
+      cacheRead: 0.12,
       cacheWrite: 0,
     },
     contextWindow: 262144,
@@ -288,7 +288,7 @@ export const SYNTHETIC_MODELS: SyntheticModel[] = [
     cost: {
       input: 0.3,
       output: 1,
-      cacheRead: 0.3,
+      cacheRead: 0.06,
       cacheWrite: 0,
     },
     contextWindow: 262144,
@@ -320,7 +320,7 @@ export function isValidApiModel(model: unknown): model is SyntheticApiModel {
   );
 }
 
-function parseApiPrice(priceStr: string): number {
+export function parseApiPrice(priceStr: string): number {
   const match = priceStr.match(/\$?(\d+\.?\d*)/);
   if (!match) return 0;
   const pricePerToken = Number.parseFloat(match[1]);
@@ -395,9 +395,10 @@ function applyDefaultCompat(model: SyntheticModel): SyntheticModel {
 }
 
 // Synthetic bills cached reads at 80% off the list price returned by the
-// models API. If the API ever exposes the discounted rate directly (i.e.
-// cacheRead is already well below input), the ratio check prevents
-// double-discounting.
+// models API. The hardcoded catalog stores the discounted rate directly;
+// API- and store-sourced models still need the discount applied. The ratio
+// guard prevents double-discounting if the API ever exposes the discounted
+// rate directly.
 const CACHE_READ_DISCOUNT = 0.2;
 const CACHE_READ_DISCOUNT_THRESHOLD = 0.5;
 
@@ -417,6 +418,10 @@ function applyCacheReadDiscount(model: SyntheticModel): SyntheticModel {
   return model;
 }
 
+function finalizeModel(model: SyntheticModel): SyntheticModel {
+  return applyCacheReadDiscount(applyDefaultCompat(model));
+}
+
 function mergeWithStaticOverride(
   apiModel: SyntheticModel,
   override: SyntheticModel | undefined,
@@ -434,7 +439,7 @@ function mergeWithStaticOverride(
 }
 
 export function buildSyntheticProviderModels(): SyntheticModel[] {
-  return SYNTHETIC_MODELS.map(applyDefaultCompat).map(applyCacheReadDiscount);
+  return SYNTHETIC_MODELS.map(finalizeModel);
 }
 
 export function buildSyntheticProviderModelsFromApi(
@@ -456,8 +461,7 @@ export function buildSyntheticProviderModelsFromApi(
         overrides.get(model.id),
       );
     })
-    .map(applyDefaultCompat)
-    .map(applyCacheReadDiscount);
+    .map(finalizeModel);
 }
 
 export function buildSyntheticProviderModelsFromStore(
@@ -476,6 +480,5 @@ export function buildSyntheticProviderModelsFromStore(
       }
       return mergeWithStaticOverride(model, overrides.get(model.id));
     })
-    .map(applyDefaultCompat)
-    .map(applyCacheReadDiscount);
+    .map(finalizeModel);
 }
