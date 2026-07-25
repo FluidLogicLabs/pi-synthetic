@@ -8,11 +8,11 @@ import {
 } from "../../src/config";
 import {
   type QuotasResponse,
-  SYNTHETIC_QUOTAS_REQUEST_EVENT,
   SYNTHETIC_QUOTAS_UPDATED_EVENT,
   type SyntheticQuotasUpdatedPayload,
 } from "../../src/types/quotas";
 import { formatResetTime } from "../../src/utils/quotas";
+import { requestQuotas } from "../_shared/quota-events";
 
 interface RateWindow {
   label: string;
@@ -119,10 +119,6 @@ export function registerSubBarIntegration(pi: ExtensionAPI): void {
     });
   }
 
-  function requestQuotas(): void {
-    pi.events.emit(SYNTHETIC_QUOTAS_REQUEST_EVENT, undefined);
-  }
-
   // Receive quota updates from the provider extension
   pi.events.on(SYNTHETIC_QUOTAS_UPDATED_EVENT, (data: unknown) => {
     if (!isSynthetic() || !subCoreReady) return;
@@ -136,7 +132,7 @@ export function registerSubBarIntegration(pi: ExtensionAPI): void {
     if (!enabled) return;
 
     if (subCoreReady && currentProvider === "synthetic") {
-      requestQuotas();
+      requestQuotas(pi);
     }
   });
 
@@ -152,7 +148,7 @@ export function registerSubBarIntegration(pi: ExtensionAPI): void {
     currentProvider = ctx.model?.provider;
 
     if (subCoreReady && isSynthetic()) {
-      requestQuotas();
+      requestQuotas(pi);
     }
   });
 

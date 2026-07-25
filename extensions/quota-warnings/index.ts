@@ -12,15 +12,12 @@ import {
 import { QuotaHistory } from "../../src/services/quota-history";
 import { QuotaWarningNotifier } from "../../src/services/quota-warnings";
 import {
-  SYNTHETIC_QUOTAS_READ_EVENT,
-  SYNTHETIC_QUOTAS_REQUEST_EVENT,
   SYNTHETIC_QUOTAS_UPDATED_EVENT,
-  type SyntheticQuotasReadPayload,
-  type SyntheticQuotasRequestPayload,
   type SyntheticQuotasSnapshotPayload,
   type SyntheticQuotasUpdatedPayload,
 } from "../../src/types/quotas";
 import { buildProjectionHints } from "../../src/utils/quotas-projection";
+import { readQuotas, requestQuotas } from "../_shared/quota-events";
 
 export default async function (pi: ExtensionAPI) {
   await configLoader.load();
@@ -33,22 +30,6 @@ export default async function (pi: ExtensionAPI) {
   if (enabled) {
     historyReady = history.initialize();
     await historyReady;
-  }
-
-  function requestQuotas(
-    respond?: (snapshot: SyntheticQuotasSnapshotPayload | undefined) => void,
-  ): void {
-    pi.events.emit(SYNTHETIC_QUOTAS_REQUEST_EVENT, {
-      respond,
-    } satisfies SyntheticQuotasRequestPayload);
-  }
-
-  function readQuotas(
-    respond: (snapshot: SyntheticQuotasSnapshotPayload | undefined) => void,
-  ): void {
-    pi.events.emit(SYNTHETIC_QUOTAS_READ_EVENT, {
-      respond,
-    } satisfies SyntheticQuotasReadPayload);
   }
 
   async function evaluateSnapshot(
@@ -71,11 +52,11 @@ export default async function (pi: ExtensionAPI) {
 
   function evaluateFromStoreOrRefresh(ctx: ExtensionContext): void {
     if (!enabled || ctx.model?.provider !== "synthetic") return;
-    readQuotas((snapshot) => {
+    readQuotas(pi, (snapshot) => {
       if (snapshot) {
         evaluateSnapshot(snapshot, ctx).catch(() => undefined);
       } else {
-        requestQuotas((refreshed) => {
+        requestQuotas(pi, (refreshed) => {
           if (!refreshed) return;
           evaluateSnapshot(refreshed, ctx).catch(() => undefined);
         });

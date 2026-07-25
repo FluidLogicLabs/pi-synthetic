@@ -9,13 +9,9 @@ import {
   SYNTHETIC_EXTENSIONS_REQUEST_EVENT,
   type SyntheticConfigUpdatedPayload,
 } from "../../src/config";
-import {
-  type QuotasResponse,
-  SYNTHETIC_QUOTAS_READ_EVENT,
-  SYNTHETIC_QUOTAS_REQUEST_EVENT,
-  type SyntheticQuotasReadPayload,
-  type SyntheticQuotasRequestPayload,
-  type SyntheticQuotasSnapshotPayload,
+import type {
+  QuotasResponse,
+  SyntheticQuotasSnapshotPayload,
 } from "../../src/types/quotas";
 import { formatResetTime } from "../../src/utils/quotas";
 import {
@@ -24,6 +20,7 @@ import {
   type RiskSeverity,
   toWindows,
 } from "../../src/utils/quotas-severity";
+import { readQuotas, requestQuotas } from "../_shared/quota-events";
 
 const EXTENSION_ID = "synthetic-usage";
 
@@ -83,22 +80,6 @@ export default async function (pi: ExtensionAPI) {
 
   let enabled = configLoader.getConfig().usageStatus;
 
-  function requestQuotas(
-    respond: (snapshot: SyntheticQuotasSnapshotPayload | undefined) => void,
-  ): void {
-    pi.events.emit(SYNTHETIC_QUOTAS_REQUEST_EVENT, {
-      respond,
-    } satisfies SyntheticQuotasRequestPayload);
-  }
-
-  function readQuotas(
-    respond: (snapshot: SyntheticQuotasSnapshotPayload | undefined) => void,
-  ): void {
-    pi.events.emit(SYNTHETIC_QUOTAS_READ_EVENT, {
-      respond,
-    } satisfies SyntheticQuotasReadPayload);
-  }
-
   function renderSnapshot(
     ctx: ExtensionContext,
     snapshot: SyntheticQuotasSnapshotPayload | undefined,
@@ -131,12 +112,12 @@ export default async function (pi: ExtensionAPI) {
       clearStatus(ctx);
       return;
     }
-    readQuotas((snapshot) => {
+    readQuotas(pi, (snapshot) => {
       if (snapshot) {
         renderSnapshot(ctx, snapshot);
       } else {
         renderSnapshot(ctx, undefined); // show loading
-        requestQuotas((refreshed) => renderSnapshot(ctx, refreshed));
+        requestQuotas(pi, (refreshed) => renderSnapshot(ctx, refreshed));
       }
     });
   }
