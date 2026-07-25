@@ -67,8 +67,6 @@ const DEFAULT_CONFIG: ResolvedSyntheticConfig = {
   proxyRequiresAuth: true,
 };
 
-export const pendingMessages: string[] = [];
-
 const migrations: Migration<SyntheticConfig>[] = [];
 
 const QUOTA_WARNING_THRESHOLDS_DESCRIPTION =

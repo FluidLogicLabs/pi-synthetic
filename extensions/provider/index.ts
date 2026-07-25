@@ -10,7 +10,6 @@ import {
 import {
   configLoader,
   emitSyntheticConfigUpdated,
-  pendingMessages,
   registerSyntheticSettings,
   SYNTHETIC_CONFIG_UPDATED_EVENT,
   SYNTHETIC_EXTENSIONS_REGISTER_EVENT,
@@ -185,14 +184,6 @@ export default async function (pi: ExtensionAPI) {
   });
 
   pi.on("session_start", async (_event, ctx) => {
-    const messages = pendingMessages.splice(0).map((m) => `- ${m}`);
-    if (messages.length > 0) {
-      ctx.ui.notify(
-        `[synthetic] Migration messages: \n ${messages.join("\n")}`,
-        "info",
-      );
-    }
-
     loadedFeatures.clear();
     quotaStore.clear();
     getApiKey = () => ctx.modelRegistry.getApiKeyForProvider("synthetic");
