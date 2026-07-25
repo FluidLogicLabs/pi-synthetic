@@ -394,6 +394,29 @@ function applyDefaultCompat(model: SyntheticModel): SyntheticModel {
   };
 }
 
+// Synthetic bills cached reads at 80% off the list price returned by the
+// models API. If the API ever exposes the discounted rate directly (i.e.
+// cacheRead is already well below input), the ratio check prevents
+// double-discounting.
+const CACHE_READ_DISCOUNT = 0.2;
+const CACHE_READ_DISCOUNT_THRESHOLD = 0.5;
+
+function applyCacheReadDiscount(model: SyntheticModel): SyntheticModel {
+  if (
+    model.cost.input > 0 &&
+    model.cost.cacheRead >= model.cost.input * CACHE_READ_DISCOUNT_THRESHOLD
+  ) {
+    return {
+      ...model,
+      cost: {
+        ...model.cost,
+        cacheRead: model.cost.cacheRead * CACHE_READ_DISCOUNT,
+      },
+    };
+  }
+  return model;
+}
+
 function mergeWithStaticOverride(
   apiModel: SyntheticModel,
   override: SyntheticModel | undefined,
@@ -411,7 +434,7 @@ function mergeWithStaticOverride(
 }
 
 export function buildSyntheticProviderModels(): SyntheticModel[] {
-  return SYNTHETIC_MODELS.map(applyDefaultCompat);
+  return SYNTHETIC_MODELS.map(applyDefaultCompat).map(applyCacheReadDiscount);
 }
 
 export function buildSyntheticProviderModelsFromApi(
@@ -433,7 +456,8 @@ export function buildSyntheticProviderModelsFromApi(
         overrides.get(model.id),
       );
     })
-    .map(applyDefaultCompat);
+    .map(applyDefaultCompat)
+    .map(applyCacheReadDiscount);
 }
 
 export function buildSyntheticProviderModelsFromStore(
@@ -452,5 +476,6 @@ export function buildSyntheticProviderModelsFromStore(
       }
       return mergeWithStaticOverride(model, overrides.get(model.id));
     })
-    .map(applyDefaultCompat);
+    .map(applyDefaultCompat)
+    .map(applyCacheReadDiscount);
 }

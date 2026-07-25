@@ -106,16 +106,6 @@ function compareModels(
       });
     }
 
-    const apiCacheReadCost = parsePrice(apiModel.pricing.input_cache_reads);
-    if (Math.abs(apiCacheReadCost - hardcoded.cost.cacheRead) > epsilon) {
-      discrepancies.push({
-        model: hardcoded.id,
-        field: "cost.cacheRead",
-        hardcoded: hardcoded.cost.cacheRead,
-        api: apiCacheReadCost,
-      });
-    }
-
     if (apiModel.supported_features !== undefined) {
       const apiSupportsReasoning =
         apiModel.supported_features.includes("reasoning");
@@ -172,7 +162,7 @@ describe("Synthetic models", () => {
     expect(discrepancies).toHaveLength(0);
   });
 
-  it("buildSyntheticProviderModels returns the static catalog with defaults", () => {
+  it("buildSyntheticProviderModels returns the static catalog with defaults and cache-read discount", () => {
     const models = buildSyntheticProviderModels();
     expect(models.length).toBe(SYNTHETIC_MODELS.length);
     for (const model of models) {
@@ -185,6 +175,10 @@ describe("Synthetic models", () => {
       }
       if (model.reasoning) {
         expect(compat?.supportsReasoningEffort).toBe(true);
+      }
+      // Synthetic bills cache reads at 80% off the API list price.
+      if (model.cost.input > 0) {
+        expect(model.cost.cacheRead).toBe(model.cost.input * 0.2);
       }
     }
   });
@@ -215,6 +209,7 @@ describe("Synthetic models", () => {
     const model = models[0];
     expect(model.id).toBe("hf:MiniMaxAI/MiniMax-M3");
     expect(model.cost.input).toBe(0.6);
+    expect(model.cost.cacheRead).toBe(0.12); // 80% cache-read discount
     const compat = model.compat as Record<string, unknown> | undefined;
     expect(compat?.maxTokensField).toBe("max_completion_tokens");
   });

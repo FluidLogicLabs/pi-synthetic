@@ -38,7 +38,6 @@ import {
   buildSyntheticProviderModelsFromStore,
 } from "./models";
 import { createSyntheticRefreshModels } from "./refresh-models";
-import { wrapSyntheticStreamSimple } from "./stream-simple";
 
 export function registerSyntheticProvider(pi: ExtensionAPI): void {
   const config: ProviderConfig = {
@@ -64,14 +63,7 @@ export function registerSyntheticProvider(pi: ExtensionAPI): void {
 
   const provider = getApiProvider("openai-completions");
   if (provider?.streamSimple) {
-    config.streamSimple = wrapSyntheticStreamSimple(provider.streamSimple);
-  } else if (
-    process.env.PI_SYNTHETIC_DEBUG === "1" ||
-    process.env.PI_SYNTHETIC_DEBUG === "true"
-  ) {
-    console.warn(
-      "[synthetic] openai-completions streamSimple is not available; subscription cache-read discount will not be applied.",
-    );
+    config.streamSimple = provider.streamSimple;
   }
 
   pi.registerProvider("synthetic", config);
