@@ -39,6 +39,7 @@ import {
 import { createSyntheticRefreshModels } from "./refresh-models";
 
 export function registerSyntheticProvider(pi: ExtensionAPI): void {
+  const staticModels = buildSyntheticProviderModels();
   const config: ProviderConfig = {
     baseUrl: "https://api.synthetic.new/openai/v1",
     apiKey: "$SYNTHETIC_API_KEY",
@@ -47,9 +48,9 @@ export function registerSyntheticProvider(pi: ExtensionAPI): void {
       Referer: "https://pi.dev",
       "X-Title": "npm:@aliou/pi-synthetic",
     },
-    models: buildSyntheticProviderModels(),
+    models: staticModels,
     refreshModels: createSyntheticRefreshModels(
-      buildSyntheticProviderModels(),
+      staticModels,
       async (apiKey, signal) => {
         const client = new SyntheticClient({ apiKey });
         const result = await client.models({ signal });
