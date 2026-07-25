@@ -2,13 +2,13 @@
 
 # Pi Synthetic Extension
 
-A Pi extension that adds [Synthetic](https://synthetic.new) as a model provider, giving you access to open-source models through Synthetic's OpenAI-compatible API.
+A Pi extension that adds [Synthetic](https://gnldxt.link/ref-syn) as a model provider, giving you access to open-source models through Synthetic's OpenAI-compatible API.
 
 ## Installation
 
 ### Get API Key
 
-Sign up at [synthetic.new](https://synthetic.new/?referral=NDWw1u3UDWiFyDR) to get an API key (referral link).
+Sign up at [gnldxt.link/ref-syn](https://gnldxt.link/ref-syn) to get an API key (referral link).
 
 ### Configure Credentials
 
@@ -52,15 +52,13 @@ Once installed, select `synthetic` as your provider and choose from available mo
 /model synthetic hf:moonshotai/Kimi-K2.5
 ```
 
-### Model Hosting
+### Models
 
-All models are accessed through Synthetic's API. Some models are hosted by Synthetic directly (`provider: "synthetic"` in the model config); others are proxied by Synthetic to upstream backends such as Fireworks or Together.
+Models are discovered dynamically from Synthetic's models API and cached for four hours. The hardcoded catalog in `extensions/provider/models.ts` is an offline fallback and the override source for model-specific compatibility settings (`thinkingLevelMap`, `compat`) that the API does not expose. When the API returns a model whose `id` matches a static entry, the static entry's `thinkingLevelMap` and `compat` are merged on top of the API-sourced fields.
 
-Synthetic also provides permanent aliases (`syn:large:text`, `syn:small:text`, `syn:large:vision`, `syn:small:vision`) that route to the current best model for each category. These aliases are stable across model rotations — using an alias means no reconfiguration when models change. Alias models are always visible even when Proxied Models is disabled.
+Synthetic publishes permanent category model IDs — `syn:large:text`, `syn:small:text`, `syn:large:vision`, `syn:small:vision` — that route to the current best model for each category. These IDs are stable across model rotations, so using one means no reconfiguration when Synthetic swaps the underlying model. They appear in the catalog like any other model and carry their own `thinkingLevelMap` overrides in the static catalog.
 
-By default, new installs show only Synthetic-hosted models. You can enable proxied models in `/synthetic:settings` under **Models > Proxied Models**. Existing configurations keep proxied models enabled to preserve prior behavior.
-
-The `provider` field in `extensions/provider/models.ts` is for maintenance only and is stripped before registering models with Pi, so users always select the `synthetic` provider.
+All user-facing model selection uses the Pi provider name `synthetic`.
 
 ### Web Search Tool
 
@@ -92,7 +90,7 @@ Synthetic reasoning models are mostly binary on/off (a single `medium` toggle in
 - high → `high` (GLM High tier, lower)
 - max → `max` (GLM Max tier, highest — native `max` thinking level, accepted by Synthetic's OpenAI shim)
 
-Other Pi levels (`minimal`, `low`, `medium`, `xhigh`) are hidden for GLM-5.2. Aliases such as `syn:large:text` inherit this map from their target at build time. The `max` level is opt-in and was added in Pi 0.80.6.
+Other Pi levels (`minimal`, `low`, `medium`, `xhigh`) are hidden for GLM-5.2. The `max` level is opt-in and was added in Pi 0.80.6.
 
 ### Quotas Command
 
@@ -122,35 +120,49 @@ For weekly credits and rolling five-hour requests, projections warn at 80%, beco
 
 ## Disabling Features
 
-Each feature (provider, web search, quotas command, sub bar integration, usage status, quota warnings) is a separate Pi extension. You can disable individual features using `pi config`:
+Each feature (provider, web search, quotas command, sub bar integration, usage status, quota warnings) is a separate Pi extension. Disable individual features either through the `pi config` TUI or by editing `~/.pi/agent/settings.json`.
 
+Run `pi config` to open the resource selector and unselect the extension you want to disable. Press Tab to switch between global and project-local scope.
+
+To disable features directly in `~/.pi/agent/settings.json`, list the extensions you want with `+` (enable) and `-` (disable) prefixes on paths relative to the package root. For example, to disable sub-bar-integration and usage-status while keeping the rest active:
+
+```json
+{
+  "packages": [
+    {
+      "source": "npm:@aliou/pi-synthetic",
+      "extensions": [
+        "-src/extensions/sub-bar-integration/index.ts",
+        "+src/extensions/command-quotas/index.ts",
+        "-src/extensions/usage-status/index.ts",
+        "+src/extensions/quota-warnings/index.ts",
+        "+extensions/web-search/index.ts",
+        "+extensions/provider/index.ts"
+      ]
+    }
+  ]
+}
 ```
-pi config extensions.disabled add @aliou/pi-synthetic/quota-warnings
-```
 
-This prevents the quota-warnings extension from loading while keeping the rest of pi-synthetic active. Replace `quota-warnings` with `web-search`, `command-quotas`, `sub-bar-integration`, `usage-status`, or `provider` to disable other features.
+The extension paths map to the files under `extensions/` in this repo: `provider`, `web-search`, `command-quotas`, `sub-bar-integration`, `usage-status`, and `quota-warnings`.
 
-The **Proxied Models** and **Utility API Proxy** settings are not loadable extension features. They are regular settings controlled through `/synthetic:settings`.
+The **Utility API Proxy** setting is not a loadable extension feature. It is a regular setting controlled through `/synthetic:settings`.
 
 ## Adding or Updating Models
 
-Models are hardcoded in `extensions/provider/models.ts`. Entries are a union of concrete models and thin aliases (`syn:*` IDs).
+Models are hardcoded in `extensions/provider/models.ts` as concrete entries.
 
-### Adding a concrete model
+### Adding a model
 
 1. Edit `extensions/provider/models.ts`
 2. Append a concrete model following the `SyntheticModelConfig` interface
-3. Set `provider` to the upstream backend Synthetic uses for that model, such as `synthetic`, `fireworks`, or `together`
-4. Run `pnpm run typecheck` to verify
+3. Set `id` and `name` from the Synthetic API
+4. Add `thinkingLevelMap` and `compat` overrides only when the API does not expose enough information for Pi to use the model correctly
+5. Run `pnpm run typecheck` to verify
 
-### Adding an alias model
+The dynamic refresh discovers new models from the API automatically on the next refresh; the static entry is only needed for offline fallback and for the overrides above.
 
-1. Add a thin `{ id, name, aliasFor }` entry at the top of `SYNTHETIC_MODELS`
-2. Set `id` and `name` from the Synthetic API
-3. Set `aliasFor` to `"hf:" + hugging_face_id` from the Synthetic API
-4. The resolved alias inherits all fields from the target at build time
-
-When Synthetic changes which model an alias routes to, update only the `aliasFor` field.
+See `AGENTS.md` for the full model entry shape and the update workflow.
 
 ## Development
 
@@ -203,12 +215,12 @@ This repository uses [Changesets](https://github.com/changesets/changesets) for 
 
 ## Requirements
 
-- Pi coding agent v0.80.6+
+- Pi coding agent v0.80.8+ (required for `ProviderConfig.refreshModels` dynamic model discovery)
 - Synthetic API key (configured in `~/.pi/agent/auth.json` or via `SYNTHETIC_API_KEY`) for model provider calls and authenticated utility API calls
 
 ## Links
 
-- [Synthetic](https://synthetic.new)
-- [Synthetic Models](https://synthetic.new/models)
+- [Synthetic](https://gnldxt.link/ref-syn)
+- [Synthetic Models](https://gnldxt.link/ref-syn)
 - [Synthetic API Docs](https://dev.synthetic.new/docs/api/overview)
 - [Pi Documentation](https://buildwithpi.ai/)

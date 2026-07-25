@@ -26,12 +26,16 @@ pnpm changeset    # Create changeset for versioning
 extensions/
   provider/
     index.ts                    # Provider extension entry point; ingests quota headers
-    models.ts                   # Hardcoded provider model definitions
+    models.ts                   # Static fallback model catalog + API/store builders
     models.test.ts              # Model config tests
+    refresh-models.ts           # refreshModels impl: API fetch with 4h store cache, fallback to static
+    refresh-models.test.ts      # Refresh tests
     context-overflow.ts         # Provider-specific overflow normalization
   web-search/
-    index.ts                    # Web search extension entry point
+    index.ts                    # Web search extension entry point; entitlement gating
+    index.test.ts               # Entitlement/activation tests
     tool.ts                     # Synthetic web search tool registration
+    tool.test.ts                # Tool tests
   command-quotas/
     index.ts                    # Quotas command extension entry point
     command.ts                  # `synthetic:quotas` command for usage display
@@ -45,7 +49,12 @@ extensions/
     index.ts                    # Footer status bar showing live quota usage
 src/
   client/
-    index.ts                    # Synthetic client for quotas, web search, and model-list endpoints
+    index.ts                    # Barrel re-exporting the public client surface
+    index.test.ts              # Client + resolveSyntheticClientOptions tests
+    synthetic-client.ts         # SyntheticClient: quotas, web search, model-list calls
+    utility-api.ts              # Utility API base URL resolution, proxy + auth detection
+    utils.ts                    # Fetch timeout, auth headers, error parsing
+    types.ts                    # Synthetic API model, quotas, search, client option types
   services/
     quota-history.ts            # Feature-gated bounded JSONL history for warning projections
     quota-history.test.ts       # Tests
@@ -53,33 +62,36 @@ src/
     quota-store.test.ts         # Tests
     quota-warnings.ts           # Pi-agnostic transition-based warning evaluator
     quota-warnings.test.ts      # Tests
-  config.ts                     # Feature settings and config migrations
-  lib/
-    env.ts                      # Auth helpers wrapping Pi AuthStorage
+  config.ts                     # Feature settings, /synthetic:settings command, config migrations
   types/
     quotas.ts                   # Quotas API types, event constants, parseQuotaHeader
+    quotas.test.ts              # Tests
   utils/
     quotas.ts                   # Quota formatting helpers
+    quotas.test.ts              # Tests
     quotas-severity.ts          # Quota severity calculations
+    quotas-severity.test.ts     # Tests
     quotas-projection.ts        # Refill-aware 5-hour and weekly quota projections
+    quotas-projection.test.ts  # Tests
 ```
 
 ## Conventions
 
 - Credentials come from Pi's provider auth resolution: `~/.pi/agent/auth.json` (recommended), `SYNTHETIC_API_KEY` environment variable, or the `apiKey: "$SYNTHETIC_API_KEY"` configured on the provider
 - Provider uses OpenAI-compatible API at `https://api.synthetic.new/openai/v1`
-- Non-provider Synthetic endpoints (`/v2/quotas`, `/v2/search`, `/openai/v1/models`) go through `src/client/index.ts`
-- Models are fetched dynamically from `https://api.synthetic.new/openai/v1/models` via Pi 0.80.8's `ProviderConfig.refreshModels` and cached in `context.store` with a 4-hour TTL
+- Non-provider Synthetic endpoints (`/v2/quotas`, `/v2/search`, `/openai/v1/models`) go through `src/client/synthetic-client.ts`
+- Models are fetched dynamically from `https://api.synthetic.new/openai/v1/models` via `ProviderConfig.refreshModels` (Pi 0.80.8+) and cached in `context.store` with a 4-hour TTL; see `extensions/provider/refresh-models.ts`
 - The hardcoded catalog in `extensions/provider/models.ts` is kept as an offline fallback and as the override source for model-specific compatibility settings (`thinkingLevelMap`, `compat`) that the API does not expose
 - All user-facing model selection still uses the Pi provider name `synthetic`
 - Web search tool and quotas command are always registered; they fail at call time if credentials/subscription are missing unless an unauthenticated utility API proxy is configured
 - Error messages guide users to add credentials to `~/.pi/agent/auth.json`, set `SYNTHETIC_API_KEY`, or configure an unauthenticated utility API proxy when relevant
 - Quota data flows event-driven: provider ingests `x-synthetic-quotas` header from `after_provider_response` into `QuotaStore`, which broadcasts via `synthetic:quotas:updated`; consumers (usage-status, quota-warnings, sub-bar-integration) listen and request refreshes via `synthetic:quotas:request` — no polling
 - Persistent quota history is owned by the quota-warnings extension. It initializes and writes only while `quotaWarnings` is enabled; users who leave warnings disabled get no history directory or files
+- There is no `provider` field on the Pi model config and no per-model upstream-host concept. The `provider` field exists only on the raw Synthetic API response (`SyntheticApiModel.provider`) and is not stored on registered models
 
 ## Model Configuration
 
-`SYNTHETIC_MODELS` in `extensions/provider/models.ts` is the static fallback catalog. It is also used to apply overrides (`thinkingLevelMap`, `compat`) to models discovered from the Synthetic API in `buildSyntheticProviderModelsFromApi`.
+`SYNTHETIC_MODELS` in `extensions/provider/models.ts` is the static fallback catalog. It is also used to apply overrides (`thinkingLevelMap`, `compat`) to models discovered from the Synthetic API in `buildSyntheticProviderModelsFromApi` and `buildSyntheticProviderModelsFromStore`. Overrides are matched by `id` and merged on top of API-sourced fields.
 
 ### Model entry
 
@@ -92,7 +104,7 @@ src/
   cost: {
     input: 0.55,      // $ per million tokens
     output: 2.19,
-    cacheRead: 0.55,
+    cacheRead: 0.55,  // store the 80%-off rate directly; API-sourced models get the discount applied in finalizeModel
     cacheWrite: 0
   },
   contextWindow: 202752,
@@ -126,6 +138,8 @@ Append to `SYNTHETIC_MODELS` following the model entry shape above.
 
 The dynamic refresh will discover the new model automatically on the next refresh; the static entry is only needed for offline fallback and for the overrides above.
 
+The `syn:large:text`, `syn:small:text`, `syn:large:vision`, and `syn:small:vision` IDs are Synthetic's permanent category model IDs (they route to the current best model per category). They are concrete catalog entries that carry their own `thinkingLevelMap` overrides, not aliases that resolve to another entry.
+
 ## Versioning
 
 Uses changesets. Run `pnpm changeset` before committing user-facing changes.
@@ -137,7 +151,7 @@ Uses changesets. Run `pnpm changeset` before committing user-facing changes.
 ## Key Features
 
 1. **Provider**: OpenAI-compatible chat completions with dynamic Synthetic model discovery via `ProviderConfig.refreshModels` and a hardcoded fallback catalog
-2. **Web Search Tool**: Zero-data-retention web search via `synthetic_web_search`; can use the utility API proxy
+2. **Web Search Tool**: Zero-data-retention web search via `synthetic_web_search`; subscription-gated at session start; can use the utility API proxy
 3. **Quotas Command**: Interactive TUI for viewing API usage limits; can use the utility API proxy
 4. **Usage Status**: Footer status bar showing live quota percentages, colored by severity (event-driven)
 5. **Sub Integration**: Real-time usage tracking when used with pi-sub-core (event-driven)
