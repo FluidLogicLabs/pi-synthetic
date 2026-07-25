@@ -7,9 +7,9 @@ import {
   type Model,
 } from "@earendil-works/pi-ai";
 import { describe, expect, it, vi } from "vitest";
+import { detectBillingMode } from "../../src/utils/quotas";
 import {
   calculateSyntheticUsageCost,
-  detectBillingMode,
   type SyntheticStreamSimple,
   wrapSyntheticStreamSimple,
 } from "./stream-simple";
@@ -84,30 +84,14 @@ describe("Synthetic streamSimple wrapper", () => {
     expect(detectBillingMode(undefined)).toBe("pay-as-you-go");
   });
 
-  it("calculates raw pay-as-you-go cost", () => {
-    expectCostToEqual(
-      calculateSyntheticUsageCost(model, makeMessage().usage, "pay-as-you-go"),
-      {
-        input: 0.001,
-        output: 0.004,
-        cacheRead: 0.05,
-        cacheWrite: 0.0003,
-        total: 0.0553,
-      },
-    );
-  });
-
-  it("applies the subscription cache-read discount", () => {
-    expectCostToEqual(
-      calculateSyntheticUsageCost(model, makeMessage().usage, "subscription"),
-      {
-        input: 0.001,
-        output: 0.004,
-        cacheRead: 0.01,
-        cacheWrite: 0.0003,
-        total: 0.0153,
-      },
-    );
+  it("calculates usage cost with the cache-read discount", () => {
+    expectCostToEqual(calculateSyntheticUsageCost(model, makeMessage().usage), {
+      input: 0.001,
+      output: 0.004,
+      cacheRead: 0.01,
+      cacheWrite: 0.0003,
+      total: 0.0153,
+    });
   });
 
   it("adjusts final message cost from the response quota header", async () => {
@@ -149,7 +133,7 @@ describe("Synthetic streamSimple wrapper", () => {
     });
   });
 
-  it("keeps raw cache-read cost without subscription quotas", async () => {
+  it("applies the cache-read discount without subscription quotas", async () => {
     const base: SyntheticStreamSimple = (_model, _context, options) => {
       const stream = createAssistantMessageEventStream();
       void options?.onResponse?.({ status: 200, headers: {} }, model);
@@ -165,9 +149,9 @@ describe("Synthetic streamSimple wrapper", () => {
     expectCostToEqual(result.usage.cost, {
       input: 0.001,
       output: 0.004,
-      cacheRead: 0.05,
+      cacheRead: 0.01,
       cacheWrite: 0.0003,
-      total: 0.0553,
+      total: 0.0153,
     });
   });
 

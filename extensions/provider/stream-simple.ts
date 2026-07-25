@@ -1,7 +1,7 @@
 // Synthetic's response body reports cache-read token counts, but not the
-// billing mode used for the request. The response quota header does expose
-// subscription quota shapes, so this wrapper keeps that header observation
-// request-scoped and adjusts only the finalized assistant usage cost.
+// billing mode used for the request. Synthetic applies an 80% discount to
+// cached reads for both subscription and PAYG billing, so this wrapper
+// adjusts the finalized assistant usage cost accordingly.
 import {
   type Api,
   type AssistantMessage,
@@ -13,16 +13,12 @@ import {
   type SimpleStreamOptions,
   type Usage,
 } from "@earendil-works/pi-ai";
-import { parseQuotaHeader } from "../../src/types/quotas";
-import { type BillingMode, detectBillingMode } from "../../src/utils/quotas";
-
-export { type BillingMode, detectBillingMode } from "../../src/utils/quotas";
 
 // Synthetic's public docs describe subscription credits and cache token fields,
-// but do not document the cache-read discount. Back-to-back runtime validation
-// against subscription quota deltas shows cached reads are billed at 20% of the
-// raw cache-read price returned by /openai/v1/models.
-const SUBSCRIPTION_CACHE_READ_MULTIPLIER = 0.2;
+// but do not document the cache-read discount. Both subscription and PAYG
+// billing now bill cached reads at 20% of the raw cache-read price returned by
+// /openai/v1/models (i.e. an 80% discount).
+const CACHE_READ_MULTIPLIER = 0.2;
 
 export type SyntheticStreamSimple = (
   model: Model<Api>,
@@ -33,12 +29,8 @@ export type SyntheticStreamSimple = (
 export function calculateSyntheticUsageCost(
   model: Pick<Model<Api>, "cost">,
   usage: Pick<Usage, "input" | "output" | "cacheRead" | "cacheWrite">,
-  billingMode: BillingMode,
 ): Usage["cost"] {
-  const cacheReadRate =
-    billingMode === "subscription"
-      ? model.cost.cacheRead * SUBSCRIPTION_CACHE_READ_MULTIPLIER
-      : model.cost.cacheRead;
+  const cacheReadRate = model.cost.cacheRead * CACHE_READ_MULTIPLIER;
 
   const input = (model.cost.input / 1_000_000) * usage.input;
   const output = (model.cost.output / 1_000_000) * usage.output;
@@ -57,13 +49,12 @@ export function calculateSyntheticUsageCost(
 function withAdjustedUsageCost(
   model: Model<Api>,
   message: AssistantMessage,
-  billingMode: BillingMode,
 ): AssistantMessage {
   return {
     ...message,
     usage: {
       ...message.usage,
-      cost: calculateSyntheticUsageCost(model, message.usage, billingMode),
+      cost: calculateSyntheticUsageCost(model, message.usage),
     },
   };
 }
@@ -71,30 +62,25 @@ function withAdjustedUsageCost(
 function adjustFinalEventCost(
   model: Model<Api>,
   event: AssistantMessageEvent,
-  billingMode: BillingMode,
 ): AssistantMessageEvent {
   if (event.type === "done") {
     return {
       ...event,
-      message: withAdjustedUsageCost(model, event.message, billingMode),
+      message: withAdjustedUsageCost(model, event.message),
     };
   }
 
   if (event.type === "error") {
     return {
       ...event,
-      error: withAdjustedUsageCost(model, event.error, billingMode),
+      error: withAdjustedUsageCost(model, event.error),
     };
   }
 
   return event;
 }
 
-function createErrorMessage(
-  model: Model<Api>,
-  billingMode: BillingMode,
-  err: unknown,
-): AssistantMessage {
+function createErrorMessage(model: Model<Api>, err: unknown): AssistantMessage {
   return {
     role: "assistant",
     content: [],
@@ -107,11 +93,12 @@ function createErrorMessage(
       cacheRead: 0,
       cacheWrite: 0,
       totalTokens: 0,
-      cost: calculateSyntheticUsageCost(
-        model,
-        { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-        billingMode,
-      ),
+      cost: calculateSyntheticUsageCost(model, {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+      }),
     },
     stopReason: "error",
     errorMessage: err instanceof Error ? err.message : String(err),
@@ -123,12 +110,11 @@ async function forwardSyntheticStream(
   inner: AssistantMessageEventStream,
   outer: AssistantMessageEventStream,
   model: Model<Api>,
-  getBillingMode: () => BillingMode,
 ): Promise<void> {
   let terminated = false;
   try {
     for await (const event of inner) {
-      const adjusted = adjustFinalEventCost(model, event, getBillingMode());
+      const adjusted = adjustFinalEventCost(model, event);
       if (adjusted.type === "done" || adjusted.type === "error") {
         terminated = true;
       }
@@ -141,7 +127,7 @@ async function forwardSyntheticStream(
     outer.push({
       type: "error",
       reason: "error",
-      error: createErrorMessage(model, getBillingMode(), err),
+      error: createErrorMessage(model, err),
     });
     terminated = true;
   } finally {
@@ -153,7 +139,6 @@ async function forwardSyntheticStream(
         reason: "error",
         error: createErrorMessage(
           model,
-          getBillingMode(),
           new Error("synthetic stream ended without a terminal event"),
         ),
       });
@@ -166,19 +151,9 @@ export function wrapSyntheticStreamSimple(
   base: SyntheticStreamSimple,
 ): SyntheticStreamSimple {
   return (model, context, options = {}) => {
-    let billingMode: BillingMode = "pay-as-you-go";
     const outer = createAssistantMessageEventStream();
-
-    const inner = base(model, context, {
-      ...options,
-      onResponse: async (response, responseModel) => {
-        billingMode = detectBillingMode(parseQuotaHeader(response.headers));
-        await options.onResponse?.(response, responseModel);
-      },
-    });
-
-    void forwardSyntheticStream(inner, outer, model, () => billingMode);
-
+    const inner = base(model, context, options);
+    void forwardSyntheticStream(inner, outer, model);
     return outer;
   };
 }
