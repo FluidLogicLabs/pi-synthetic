@@ -12,6 +12,11 @@ import {
   type SyntheticQuotasUpdatedPayload,
 } from "../../src/types/quotas";
 import { formatResetTime } from "../../src/utils/quotas";
+import {
+  type QuotaWindow,
+  safePercent,
+  toWindows,
+} from "../../src/utils/quotas-severity";
 import { requestQuotas } from "../_shared/quota-events";
 
 interface RateWindow {
@@ -28,75 +33,48 @@ interface UsageSnapshot {
   lastSuccessAt?: number;
 }
 
+const SUB_BAR_LABELS: Record<string, string> = {
+  weeklyTokenLimit: "Credits",
+  rollingFiveHourLimit: "5h",
+  "search.hourly": "Search",
+  freeToolCalls: "Tools",
+};
+
 function toUsageSnapshot(quotas: QuotasResponse): UsageSnapshot {
-  const windows: RateWindow[] = [];
+  const windows = toWindows(quotas);
 
-  if (quotas.weeklyTokenLimit) {
-    const { weeklyTokenLimit } = quotas;
-    windows.push({
-      label: "Credits",
-      usedPercent: Math.round(
-        Math.max(0, Math.min(100, 100 - weeklyTokenLimit.percentRemaining)),
-      ),
-      resetDescription: formatResetTime(weeklyTokenLimit.nextRegenAt),
-      resetAt: weeklyTokenLimit.nextRegenAt,
-    });
-  }
-
-  if (quotas.rollingFiveHourLimit && quotas.rollingFiveHourLimit.max > 0) {
-    const { rollingFiveHourLimit } = quotas;
-    const used = rollingFiveHourLimit.max - rollingFiveHourLimit.remaining;
-    windows.push({
-      label: "5h",
-      usedPercent: Math.round(
-        Math.max(0, Math.min(100, (used / rollingFiveHourLimit.max) * 100)),
-      ),
-      resetDescription: formatResetTime(rollingFiveHourLimit.nextTickAt),
-      resetAt: rollingFiveHourLimit.nextTickAt,
-    });
-  }
-
+  // toWindows omits the legacy subscription-only 5h window; preserve it so
+  // subscription responses still show a 5h usage bar.
   if (
     !quotas.rollingFiveHourLimit &&
     quotas.subscription?.limit &&
-    quotas.subscription.limit > 0
+    quotas.subscription.limit > 0 &&
+    !windows.some((w) => w.id === "rollingFiveHourLimit")
   ) {
-    const pct =
-      (quotas.subscription.requests / quotas.subscription.limit) * 100;
     windows.push({
-      label: "5h",
-      usedPercent: Math.round(Math.max(0, Math.min(100, pct))),
-      resetDescription: formatResetTime(quotas.subscription.renewsAt),
-      resetAt: quotas.subscription.renewsAt,
-    });
-  }
-
-  if (quotas.search?.hourly?.limit && quotas.search.hourly.limit > 0) {
-    const pct =
-      (quotas.search.hourly.requests / quotas.search.hourly.limit) * 100;
-    windows.push({
-      label: "Search",
-      usedPercent: Math.round(Math.max(0, Math.min(100, pct))),
-      resetDescription: formatResetTime(quotas.search.hourly.renewsAt),
-      resetAt: quotas.search.hourly.renewsAt,
-    });
-  }
-
-  if (quotas.freeToolCalls?.limit && quotas.freeToolCalls.limit > 0) {
-    const pct =
-      (quotas.freeToolCalls.requests / quotas.freeToolCalls.limit) * 100;
-    windows.push({
-      label: "Tools",
-      usedPercent: Math.round(Math.max(0, Math.min(100, pct))),
-      resetDescription: formatResetTime(quotas.freeToolCalls.renewsAt),
-      resetAt: quotas.freeToolCalls.renewsAt,
-    });
+      id: "rollingFiveHourLimit",
+      label: "Requests / 5h",
+      usedPercent: safePercent(
+        quotas.subscription.requests,
+        quotas.subscription.limit,
+      ),
+      resetsAt: new Date(quotas.subscription.renewsAt),
+      windowSeconds: 5 * 60 * 60,
+      usedValue: quotas.subscription.requests,
+      limitValue: quotas.subscription.limit,
+      showPace: false,
+    } satisfies QuotaWindow);
   }
 
   return {
     provider: "synthetic",
     displayName: "Synthetic",
-    windows,
+    windows: windows.map((w) => ({
+      label: SUB_BAR_LABELS[w.id] ?? w.label,
+      usedPercent: Math.round(Math.max(0, Math.min(100, w.usedPercent))),
+      resetDescription: formatResetTime(w.resetsAt.toISOString()),
+      resetAt: w.resetsAt.toISOString(),
+    })),
     lastSuccessAt: Date.now(),
   };
 }
