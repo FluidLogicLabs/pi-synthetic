@@ -15,6 +15,16 @@ interface Difference {
   api: unknown;
 }
 
+const PRICE_FIELDS = new Set(["cost.input", "cost.output", "cost.cacheRead"]);
+
+function isPriceDifference(d: Difference): boolean {
+  return PRICE_FIELDS.has(d.field);
+}
+
+function isNewModel(d: Difference): boolean {
+  return d.field === "exists" && d.api === true;
+}
+
 async function fetchApiModels(): Promise<SyntheticApiModel[]> {
   const response = await fetch(API_URL, {
     headers: { Referer: "https://github.com/aliou/pi-synthetic" },
@@ -98,11 +108,10 @@ function compare(
       });
     }
 
-    // The catalog stores the discounted cache-read rate (20% of the API list
-    // price). Compare against the expected discounted value.
+    // The catalog stores the API's input_cache_reads price directly (see the
+    // header comment in extensions/provider/models.ts), so compare as-is.
     const apiCacheReadCost = parseApiPrice(apiModel.pricing.input_cache_reads);
-    const expectedCacheReadCost = Number((apiCacheReadCost * 0.2).toFixed(10));
-    if (Math.abs(expectedCacheReadCost - hardcoded.cost.cacheRead) > EPSILON) {
+    if (Math.abs(apiCacheReadCost - hardcoded.cost.cacheRead) > EPSILON) {
       differences.push({
         model: hardcoded.id,
         field: "cost.cacheRead",
@@ -138,12 +147,8 @@ function compare(
   return differences;
 }
 
-function formatDifferences(differences: Difference[]): string {
+function formatTable(differences: Difference[]): string {
   const lines: string[] = [
-    "Upstream Synthetic model changes detected.",
-    "",
-    `Compared against ${API_URL}. The hardcoded catalog stores cache-read prices at 20% of the API list price.`,
-    "",
     "| Model | Field | Hardcoded | API |",
     "|---|---|---|---|",
   ];
@@ -164,20 +169,74 @@ function formatDifferences(differences: Difference[]): string {
     }
   }
 
-  lines.push("", "Update `extensions/provider/models.ts` accordingly.");
   return lines.join("\n");
+}
+
+function formatSection(
+  title: string,
+  body: string,
+  differences: Difference[],
+  note: string,
+): string {
+  return [`## ${title}`, "", body, "", formatTable(differences), "", note].join(
+    "\n",
+  );
 }
 
 async function main(): Promise<void> {
   const apiModels = await fetchApiModels();
   const differences = compare(apiModels, SYNTHETIC_MODELS);
 
+  const priceChanges = differences.filter(isPriceDifference);
+  const newModels = differences.filter(isNewModel);
+  const other = differences.filter(
+    (d) => !isPriceDifference(d) && !isNewModel(d),
+  );
+
+  const sections: string[] = [
+    "Upstream Synthetic model changes detected.",
+    "",
+    `Compared against ${API_URL}. The hardcoded catalog stores the API's input_cache_reads price directly.`,
+  ];
+
+  if (priceChanges.length > 0) {
+    const section = formatSection(
+      "Price changes",
+      "The upstream provider changed pricing for these models. Update the catalog so Pi reports correct costs.",
+      priceChanges,
+      "Update `cost.input` / `cost.output` / `cost.cacheRead` in `extensions/provider/models.ts`.",
+    );
+    sections.push("", section);
+  }
+
+  if (newModels.length > 0) {
+    const section = formatSection(
+      "New upstream models",
+      "These models are in the upstream API but missing from the catalog. Add them so they are selectable.",
+      newModels,
+      "Add entries to `SYNTHETIC_MODELS` in `extensions/provider/models.ts`.",
+    );
+    sections.push("", section);
+  }
+
+  if (other.length > 0) {
+    sections.push(
+      "",
+      formatSection(
+        "Other drift",
+        "Field-level drift that is neither a price change nor a new model.",
+        other,
+        "Update `extensions/provider/models.ts` accordingly.",
+      ),
+    );
+  }
+
   if (differences.length === 0) {
     console.log("No differences found between hardcoded catalog and API.");
     return;
   }
 
-  console.log(formatDifferences(differences));
+  console.log(sections.join("\n"));
   process.exit(1);
 }
 
