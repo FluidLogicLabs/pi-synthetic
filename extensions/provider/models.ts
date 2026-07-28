@@ -3,7 +3,8 @@
 //
 // This list is used as the offline fallback and as the override catalog for
 // model-specific compatibility settings (thinkingLevelMap, compat) that the
-// Synthetic API does not expose.
+// Synthetic API does not expose. cacheRead stores the price reported by the
+// API's input_cache_reads field directly.
 
 import type { ProviderModelConfig } from "@earendil-works/pi-coding-agent";
 import type { SyntheticApiModel } from "../../src/client/types";
@@ -37,7 +38,7 @@ export const SYNTHETIC_MODELS: SyntheticModel[] = [
     cost: {
       input: 1,
       output: 3,
-      cacheRead: 0.2,
+      cacheRead: 0.16,
       cacheWrite: 0,
     },
     contextWindow: 524288,
@@ -69,30 +70,34 @@ export const SYNTHETIC_MODELS: SyntheticModel[] = [
     contextWindow: 196608,
     maxTokens: 65536,
   },
-  // API: syn:large:vision → ctx=262144, out=65536
+  // API: syn:large:vision → ctx=524288, out=65536
+  // Routes to Kimi-K3. Backend accepts thinking_effort in ['high', 'low', 'max'];
+  // 'none' disables reasoning, 'medium' is rejected. 'low' produces no reasoning
+  // content, so hide it; expose off/high/max.
   {
     id: "syn:large:vision",
     name: "syn:large:vision",
     reasoning: true,
     thinkingLevelMap: {
-      off: null,
+      off: "none",
       minimal: null,
       low: null,
-      medium: "medium",
-      high: null,
+      medium: null,
+      high: "high",
       xhigh: null,
+      max: "max",
     },
     compat: {
       supportsReasoningEffort: true,
     },
     input: ["text", "image"],
     cost: {
-      input: 0.95,
-      output: 4,
-      cacheRead: 0.19,
+      input: 3,
+      output: 15,
+      cacheRead: 0.45,
       cacheWrite: 0,
     },
-    contextWindow: 262144,
+    contextWindow: 524288,
     maxTokens: 65536,
   },
   // API: syn:small:vision → ctx=262144, out=65536
@@ -122,10 +127,26 @@ export const SYNTHETIC_MODELS: SyntheticModel[] = [
     maxTokens: 65536,
   },
   // API: hf:openai/gpt-oss-120b → ctx=131072, out=65536
+  // Backend accepts reasoning_effort in ['none','minimal','low','medium','high',
+  // 'xhigh'] and rejects 'max' (400) and 'off' (not a schema value). The model
+  // reasons at every accepted effort including 'none', so reasoning cannot be
+  // disabled — hide 'off'. Expose minimal/low/medium/high/xhigh; hide 'max'.
   {
     id: "hf:openai/gpt-oss-120b",
     name: "openai/gpt-oss-120b",
     reasoning: true,
+    thinkingLevelMap: {
+      off: null,
+      minimal: "minimal",
+      low: "low",
+      medium: "medium",
+      high: "high",
+      xhigh: "xhigh",
+      max: null,
+    },
+    compat: {
+      supportsReasoningEffort: true,
+    },
     input: ["text"],
     cost: {
       input: 0.1,
@@ -157,7 +178,7 @@ export const SYNTHETIC_MODELS: SyntheticModel[] = [
     cost: {
       input: 1,
       output: 3,
-      cacheRead: 0.2,
+      cacheRead: 0.16,
       cacheWrite: 0,
     },
     contextWindow: 524288,
@@ -189,30 +210,34 @@ export const SYNTHETIC_MODELS: SyntheticModel[] = [
     contextWindow: 196608,
     maxTokens: 65536,
   },
-  // API: hf:moonshotai/Kimi-K2.7-Code → ctx=262144, out=65536
+  // API: hf:moonshotai/Kimi-K3 → ctx=524288, out=65536
+  // Backend accepts thinking_effort in ['high', 'low', 'max']; 'none' disables
+  // reasoning, 'medium' is rejected. 'low' produces no reasoning content, so
+  // hide it; expose off/high/max.
   {
-    id: "hf:moonshotai/Kimi-K2.7-Code",
-    name: "moonshotai/Kimi-K2.7-Code",
+    id: "hf:moonshotai/Kimi-K3",
+    name: "moonshotai/Kimi-K3",
     reasoning: true,
     thinkingLevelMap: {
-      off: null,
+      off: "none",
       minimal: null,
       low: null,
-      medium: "medium",
-      high: null,
+      medium: null,
+      high: "high",
       xhigh: null,
+      max: "max",
     },
     compat: {
       supportsReasoningEffort: true,
     },
     input: ["text", "image"],
     cost: {
-      input: 0.95,
-      output: 4,
-      cacheRead: 0.19,
+      input: 3,
+      output: 15,
+      cacheRead: 0.45,
       cacheWrite: 0,
     },
-    contextWindow: 262144,
+    contextWindow: 524288,
     maxTokens: 65536,
   },
   // API: hf:Qwen/Qwen3.6-27B → ctx=262144, out=65536
@@ -394,32 +419,8 @@ function applyDefaultCompat(model: SyntheticModel): SyntheticModel {
   };
 }
 
-// Synthetic bills cached reads at 80% off the list price returned by the
-// models API. The hardcoded catalog stores the discounted rate directly;
-// API- and store-sourced models still need the discount applied. The ratio
-// guard prevents double-discounting if the API ever exposes the discounted
-// rate directly.
-const CACHE_READ_DISCOUNT = 0.2;
-const CACHE_READ_DISCOUNT_THRESHOLD = 0.5;
-
-function applyCacheReadDiscount(model: SyntheticModel): SyntheticModel {
-  if (
-    model.cost.input > 0 &&
-    model.cost.cacheRead >= model.cost.input * CACHE_READ_DISCOUNT_THRESHOLD
-  ) {
-    return {
-      ...model,
-      cost: {
-        ...model.cost,
-        cacheRead: model.cost.cacheRead * CACHE_READ_DISCOUNT,
-      },
-    };
-  }
-  return model;
-}
-
 function finalizeModel(model: SyntheticModel): SyntheticModel {
-  return applyCacheReadDiscount(applyDefaultCompat(model));
+  return applyDefaultCompat(model);
 }
 
 function mergeWithStaticOverride(

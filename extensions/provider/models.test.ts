@@ -100,11 +100,8 @@ function compareModels(
       });
     }
 
-    // The catalog stores the discounted cache-read rate (20% of the API list
-    // price) so that `model.cost.cacheRead` is what Pi uses directly.
     const apiCacheReadCost = parseApiPrice(apiModel.pricing.input_cache_reads);
-    const expectedCacheReadCost = Number((apiCacheReadCost * 0.2).toFixed(10));
-    if (Math.abs(expectedCacheReadCost - hardcoded.cost.cacheRead) > epsilon) {
+    if (Math.abs(apiCacheReadCost - hardcoded.cost.cacheRead) > epsilon) {
       discrepancies.push({
         model: hardcoded.id,
         field: "cost.cacheRead",
@@ -169,7 +166,7 @@ describe("Synthetic models", () => {
     expect(discrepancies).toHaveLength(0);
   });
 
-  it("buildSyntheticProviderModels returns the static catalog with defaults and cache-read discount", () => {
+  it("buildSyntheticProviderModels returns the static catalog with defaults", () => {
     const models = buildSyntheticProviderModels();
     expect(models.length).toBe(SYNTHETIC_MODELS.length);
     for (const model of models) {
@@ -182,10 +179,6 @@ describe("Synthetic models", () => {
       }
       if (model.reasoning) {
         expect(compat?.supportsReasoningEffort).toBe(true);
-      }
-      // The hardcoded catalog stores the discounted cache-read rate directly.
-      if (model.cost.input > 0) {
-        expect(model.cost.cacheRead).toBeCloseTo(model.cost.input * 0.2, 10);
       }
     }
   });
@@ -216,7 +209,7 @@ describe("Synthetic models", () => {
     const model = models[0];
     expect(model.id).toBe("hf:MiniMaxAI/MiniMax-M3");
     expect(model.cost.input).toBe(0.6);
-    expect(model.cost.cacheRead).toBe(0.12); // 80% cache-read discount
+    expect(model.cost.cacheRead).toBe(0.6);
     const compat = model.compat as Record<string, unknown> | undefined;
     expect(compat?.maxTokensField).toBe("max_completion_tokens");
   });
