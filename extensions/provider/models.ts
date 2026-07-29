@@ -266,33 +266,6 @@ export const SYNTHETIC_MODELS: SyntheticModel[] = [
     contextWindow: 262144,
     maxTokens: 65536,
   },
-  // API: hf:MiniMaxAI/MiniMax-M3 → ctx=262144, out=65536
-  {
-    id: "hf:MiniMaxAI/MiniMax-M3",
-    name: "MiniMaxAI/MiniMax-M3",
-    reasoning: true,
-    thinkingLevelMap: {
-      off: null,
-      minimal: null,
-      low: null,
-      medium: "medium",
-      high: null,
-      xhigh: null,
-    },
-    compat: {
-      supportsReasoningEffort: true,
-      maxTokensField: "max_completion_tokens",
-    },
-    input: ["text", "image"],
-    cost: {
-      input: 0.6,
-      output: 1.2,
-      cacheRead: 0.12,
-      cacheWrite: 0,
-    },
-    contextWindow: 262144,
-    maxTokens: 65536,
-  },
   // API: hf:nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4 → ctx=262144, out=65536
   {
     id: "hf:nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4",

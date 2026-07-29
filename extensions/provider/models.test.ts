@@ -172,11 +172,7 @@ describe("Synthetic models", () => {
     for (const model of models) {
       const compat = model.compat as Record<string, unknown> | undefined;
       expect(compat?.supportsDeveloperRole).toBe(false);
-      if (model.id === "hf:MiniMaxAI/MiniMax-M3") {
-        expect(compat?.maxTokensField).toBe("max_completion_tokens");
-      } else {
-        expect(compat?.maxTokensField).toBe("max_tokens");
-      }
+      expect(compat?.maxTokensField).toBe("max_tokens");
       if (model.reasoning) {
         expect(compat?.supportsReasoningEffort).toBe(true);
       }
@@ -186,17 +182,17 @@ describe("Synthetic models", () => {
   it("buildSyntheticProviderModelsFromApi merges API data with static overrides", () => {
     const apiModels: SyntheticApiModel[] = [
       {
-        id: "hf:MiniMaxAI/MiniMax-M3",
-        name: "MiniMaxAI/MiniMax-M3",
+        id: "hf:moonshotai/Kimi-K3",
+        name: "moonshotai/Kimi-K3",
         provider: "synthetic",
         input_modalities: ["text", "image"],
         output_modalities: ["text"],
-        context_length: 262144,
+        context_length: 524288,
         max_output_length: 65536,
         pricing: {
-          prompt: "$0.0000006",
-          completion: "$0.0000012",
-          input_cache_reads: "$0.0000006",
+          prompt: "$0.000003",
+          completion: "$0.000015",
+          input_cache_reads: "$0.00000045",
           input_cache_writes: "0",
         },
         supported_features: ["reasoning"],
@@ -207,11 +203,12 @@ describe("Synthetic models", () => {
     expect(models).toHaveLength(1);
 
     const model = models[0];
-    expect(model.id).toBe("hf:MiniMaxAI/MiniMax-M3");
-    expect(model.cost.input).toBe(0.6);
-    expect(model.cost.cacheRead).toBe(0.6);
+    expect(model.id).toBe("hf:moonshotai/Kimi-K3");
+    expect(model.cost.input).toBe(3);
+    expect(model.cost.cacheRead).toBeCloseTo(0.45);
+    expect(model.thinkingLevelMap?.max).toBe("max");
     const compat = model.compat as Record<string, unknown> | undefined;
-    expect(compat?.maxTokensField).toBe("max_completion_tokens");
+    expect(compat?.supportsReasoningEffort).toBe(true);
   });
 
   it("buildSyntheticProviderModelsFromApi preserves unknown API models", () => {
