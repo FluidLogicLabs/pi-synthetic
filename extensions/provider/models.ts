@@ -119,7 +119,7 @@ export const SYNTHETIC_MODELS: SyntheticModel[] = [
     input: ["text", "image"],
     cost: {
       input: 0.45,
-      output: 3.6,
+      output: 2.2,
       cacheRead: 0.09,
       cacheWrite: 0,
     },
@@ -259,7 +259,7 @@ export const SYNTHETIC_MODELS: SyntheticModel[] = [
     input: ["text", "image"],
     cost: {
       input: 0.45,
-      output: 3.6,
+      output: 2.2,
       cacheRead: 0.09,
       cacheWrite: 0,
     },
