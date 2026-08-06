@@ -22,7 +22,8 @@
       "./extensions/quota-warnings/index.ts",
       "./extensions/usage-status/index.ts"
     ],
-    "video": "https://assets.aliou.me/github/aliou/pi-synthetic/demo.mp4"
+    "video": "https://assets.aliou.me/github/aliou/pi-synthetic/demo.mp4",
+    "image": "https://assets.aliou.me/github/aliou/pi-synthetic/banner.png"
   },
   "publishConfig": {
     "access": "public"
