@@ -70,7 +70,9 @@ export function createSyntheticProvider(
           if (await ctx.env(SYNTHETIC_API_KEY_ENV)) {
             return { type: "api_key", source: SYNTHETIC_API_KEY_ENV };
           }
-          return undefined;
+          // Anonymous: catalog endpoints are public and proxy mode (aperture)
+          // handles auth gateway-side, so the provider stays available.
+          return { type: "api_key", source: "anonymous" };
         },
         resolve: async ({ ctx, credential, signal }) => {
           signal.throwIfAborted();
@@ -86,8 +88,8 @@ export function createSyntheticProvider(
           if (envKey) {
             return { auth: { apiKey: envKey }, source: SYNTHETIC_API_KEY_ENV };
           }
-          // Anonymous resolution: the model catalog endpoints are public, so
-          // resolution succeeds without credentials and sends no token.
+          // Anonymous: catalog endpoints are public and proxy mode (aperture)
+          // handles auth gateway-side, so the provider stays available.
           return { auth: { apiKey: "" }, source: "anonymous" };
         },
       },
