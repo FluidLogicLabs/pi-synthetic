@@ -70,12 +70,6 @@
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   },
-  "pnpm": {
-    "overrides": {
-      "@earendil-works/pi-ai": "$@earendil-works/pi-coding-agent",
-      "@earendil-works/pi-tui": "$@earendil-works/pi-coding-agent"
-    }
-  },
   "peerDependenciesMeta": {
     "@earendil-works/pi-ai": {
       "optional": true
@@ -90,5 +84,9 @@
       "optional": true
     }
   },
-  "packageManager": "pnpm@10.26.1"
+  "packageManager": "pnpm@10.26.1",
+  "overrides": {
+    "@earendil-works/pi-ai": "$@earendil-works/pi-coding-agent",
+    "@earendil-works/pi-tui": "$@earendil-works/pi-coding-agent"
+  }
 }

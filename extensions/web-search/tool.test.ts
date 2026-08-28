@@ -1,6 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
 import { formatWebSearchResults } from "./tool";
 
+const fsMocks = vi.hoisted(() => ({
+  writeFile: vi.fn<
+    (
+      path: string,
+      content: string,
+      options: { encoding: "utf8"; mode: number },
+    ) => Promise<void>
+  >(async () => {}),
+}));
+vi.mock("node:fs/promises", () => ({ writeFile: fsMocks.writeFile }));
+
 function result(title: string, text: string) {
   return {
     title,
@@ -115,5 +126,19 @@ describe("formatWebSearchResults", () => {
       text,
       "utf8",
     );
+  });
+});
+
+describe("default writeResultFile (privacy)", () => {
+  it("writes temp files with mode 0o600 so other local users cannot read them", async () => {
+    fsMocks.writeFile.mockClear();
+    await formatWebSearchResults(
+      [result("large", "visible excerpt\n".repeat(20))],
+      { maxInlineBytes: 50, maxInlineBytesPerResult: 50 },
+    );
+
+    expect(fsMocks.writeFile).toHaveBeenCalledTimes(1);
+    const options = fsMocks.writeFile.mock.calls[0][2];
+    expect(options).toMatchObject({ encoding: "utf8", mode: 0o600 });
   });
 });

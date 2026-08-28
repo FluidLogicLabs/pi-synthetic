@@ -55,6 +55,22 @@ type WriteSearchResultFile = (
   encoding: "utf8",
 ) => Promise<void>;
 
+/**
+ * Default writer for truncated search results. Writes under the OS temp dir
+ * with mode 0o600 so the file is owner-readable only. The result text reveals
+ * the user's search query and must not be readable by other local users on
+ * shared hosts (the bare `writeFile` default would use the process umask,
+ * commonly 0o644). The injected `writeResultFile` keeps its existing
+ * `(path, content, encoding)` signature for compatibility.
+ */
+async function defaultWriteSearchResultFile(
+  path: string,
+  content: string,
+  _encoding: "utf8",
+): Promise<void> {
+  await writeFile(path, content, { encoding: "utf8", mode: 0o600 });
+}
+
 interface FormatWebSearchResultsOptions {
   maxInlineBytes?: number;
   maxInlineBytesPerResult?: number;
@@ -82,7 +98,7 @@ export async function formatWebSearchResults(
   {
     maxInlineBytes = MAX_INLINE_SEARCH_BYTES,
     maxInlineBytesPerResult = MAX_INLINE_SEARCH_RESULT_BYTES,
-    writeResultFile = writeFile,
+    writeResultFile = defaultWriteSearchResultFile,
   }: FormatWebSearchResultsOptions = {},
 ): Promise<{
   content: string;
