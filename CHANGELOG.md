@@ -1,5 +1,45 @@
 # @aliou/pi-synthetic
 
+## 0.26.1
+
+### Patch Changes
+
+- 9fe54b4: ### Qwen3.8-27B: expose xhigh thinking level
+
+  Upstream metadata (`GET /v1/models`) declares `reasoning_parameters.efforts: ["low", "medium", "xhigh"]` for `hf:Qwen/Qwen3.8-27B`. Live probes confirm `xhigh` produces the deepest reasoning, `low` returns no reasoning content even on hard prompts, and `high`/`max` are accepted but not model-native. `thinkingLevelMap` now exposes off / medium / xhigh.
+
+## 0.26.0
+
+### Minor Changes
+
+- 02d0e5d: Add Qwen3.8-27B to the Synthetic model fallback catalog.
+
+## 0.25.1
+
+### Patch Changes
+
+- e676837: Keep Synthetic listed in `/model` without an API key. `check` returned `undefined` when no key existed, so pi's availability gate filtered the provider out even though `resolve` already falls back to an anonymous credential (the catalog endpoints are public, and aperture proxy mode authenticates gateway-side). `check` now returns that same anonymous credential.
+
+## 0.25.0
+
+### Minor Changes
+
+- 2e34cf8: Register the Synthetic provider as a complete pi-ai `Provider` via `pi.registerProvider(provider)` instead of the name-plus-config form, with auth resolution that falls back to an anonymous credential when no key exists.
+
+## 0.24.4
+
+### Patch Changes
+
+- d5bf42b: chore: bump `@aliou/pi-utils-settings` to `^0.19.1`
+
+  Switch schema generation from `ts-json-schema-generator` to `pi-settings-schema`, add a committed `schema.json`, and wire `buildSchemaUrl` into the config loader so saved settings files include a `$schema` field. No config migrations required.
+
+## 0.24.3
+
+### Patch Changes
+
+- b7dc528: Add Pi coding-agent 0.84 compatibility for the provider model refresh: catalog reads and persistence now go through a runtime shape-detection shim (`extensions/provider/refresh-store-compat.ts`) that uses the 0.84 `context.stored` snapshot and `context.publish({ persist })` transaction when available, and falls back to the legacy `context.store` read/write on older hosts. The 4-hour cache TTL, best-effort fallback on transient fetch/build errors, and abort propagation are unchanged. The `@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai`, and `@earendil-works/pi-tui` peer ranges drop their <0.81.0 caps and now support both pre-0.84 and 0.84+ hosts.
+
 ## 0.24.2
 
 ### Patch Changes

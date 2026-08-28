@@ -1,4 +1,5 @@
 import {
+  buildSchemaUrl,
   ConfigLoader,
   type Migration,
   registerSettingsCommand,
@@ -32,7 +33,7 @@ export interface SyntheticExtensionsRegisterPayload {
 }
 
 /** Config schema version. Stamped on disk when config is seeded or migrated. */
-export const SYNTHETIC_CONFIG_VERSION: string = pkg.version;
+export const SYNTHETIC_CONFIG_VERSION = pkg.version;
 
 export interface SyntheticConfig {
   configVersion?: string;
@@ -69,13 +70,15 @@ const DEFAULT_CONFIG: ResolvedSyntheticConfig = {
 
 const migrations: Migration<SyntheticConfig>[] = [];
 
+const schemaUrl = buildSchemaUrl(pkg.name, pkg.version);
+
 const QUOTA_WARNING_THRESHOLDS_DESCRIPTION =
   "Toggle warnings when your quotas reach thresholds. Thresholds: warning at 80% projected usage, high at 90%, critical at 100% for fixed windows; dynamic windows use adaptive projected thresholds based on window progress.";
 
 export const configLoader = new ConfigLoader<
   SyntheticConfig,
   ResolvedSyntheticConfig
->("synthetic", DEFAULT_CONFIG, { migrations });
+>("synthetic", DEFAULT_CONFIG, { migrations, schemaUrl });
 
 /**
  * Seed the global config file on first use. When no config file exists in

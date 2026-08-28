@@ -266,6 +266,33 @@ export const SYNTHETIC_MODELS: SyntheticModel[] = [
     contextWindow: 262144,
     maxTokens: 65536,
   },
+  // API: hf:Qwen/Qwen3.8-27B → ctx=262144, out=65536
+  {
+    id: "hf:Qwen/Qwen3.8-27B",
+    name: "Qwen/Qwen3.8-27B",
+    reasoning: true,
+    thinkingLevelMap: {
+      off: "none",
+      minimal: null,
+      low: null,
+      medium: "medium",
+      high: null,
+      xhigh: "xhigh",
+      max: null,
+    },
+    compat: {
+      supportsReasoningEffort: true,
+    },
+    input: ["text", "image"],
+    cost: {
+      input: 0.45,
+      output: 2.2,
+      cacheRead: 0.09,
+      cacheWrite: 0,
+    },
+    contextWindow: 262144,
+    maxTokens: 65536,
+  },
   // API: hf:nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4 → ctx=262144, out=65536
   {
     id: "hf:nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4",

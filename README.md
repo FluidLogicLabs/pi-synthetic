@@ -8,7 +8,7 @@ A Pi extension that adds [Synthetic](https://gnldxt.link/ref-syn) as a model pro
 
 ### Get API Key
 
-Sign up at [gnldxt.link/ref-syn](https://gnldxt.link/ref-syn) to get an API key (referral link).
+Sign up [here](https://gnldxt.link/ref-syn) to get an API key (referral link).
 
 ### Configure Credentials
 

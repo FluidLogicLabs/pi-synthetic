@@ -26,23 +26,25 @@ function createContext(
     allowNetwork: options.allowNetwork ?? true,
     force: options.force ?? false,
     signal: new AbortController().signal,
-    store: {
-      read: vi.fn(async () =>
-        options.store
-          ? {
-              models: options.store.models ?? [],
-              checkedAt: options.store.checkedAt,
-            }
-          : undefined,
-      ),
-      write: vi.fn(async (entry) => {
-        written.push({
-          models: entry.models as unknown[],
-          checkedAt: entry.checkedAt ?? 0,
-        });
-      }),
-      delete: vi.fn(),
-    },
+    stored: options.store
+      ? {
+          models: options.store.models ?? [],
+          checkedAt: options.store.checkedAt,
+        }
+      : undefined,
+    publish: vi.fn(
+      async (publication: {
+        persist?: { models: unknown[]; checkedAt?: number };
+      }) => {
+        if (publication.persist) {
+          written.push({
+            models: publication.persist.models,
+            checkedAt: publication.persist.checkedAt ?? 0,
+          });
+        }
+        return true;
+      },
+    ),
     getWritten: () => written,
   } as unknown as RefreshModelsContext & {
     getWritten: () => Array<{ models: unknown[]; checkedAt: number }>;
